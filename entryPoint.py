@@ -1,3 +1,4 @@
+import io
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import uuid
@@ -6,6 +7,10 @@ import Scraper
 import threading
 import re
 from unidecode import unidecode
+import tensorflow as tf
+from PIL import Image
+import numpy as np
+import cv2
 
 app = Flask(__name__)
 CORS(app)
@@ -78,6 +83,59 @@ def ResultedLinks(user_id):
             return jsonify({"results": cpy}), 202#we send the lists of results
 
     return jsonify({"results":"error"}), 404#error
+
+@app.route('/startDiagnosis', methods=['POST'])
+def StartDiagnosis():
+
+    if 'photo' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['photo']
+
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    try:
+        # Read the file into memory
+        
+        image = Image.open(io.BytesIO(file.read()))
+        
+        # Preprocess the image (resize and normalize as needed by your model)
+        image_array = np.array(image)
+
+        gray_img = image_array
+        
+        if len(gray_img.shape) != 2:
+            gray_img = cv2.cvtColor(gray_img, cv2.COLOR_RGB2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=3, tileGridSize=(10, 10))
+        processed_img = clahe.apply(gray_img)
+
+        final_img = cv2.add(processed_img, 5)
+        final_img = cv2.cvtColor(final_img, cv2.COLOR_GRAY2RGB)
+        final_img = cv2.resize(final_img, (224, 224))
+        final_img = final_img.astype(np.float32)
+        final_processed_img = final_img / 255.0
+
+        # Convert to TensorFlow tensor
+        tensor = tf.convert_to_tensor(final_processed_img, dtype=tf.float32)
+        tensor = tf.expand_dims(tensor, axis=0)  # Add batch dimension
+
+        # Load your TensorFlow model
+        model = tf.keras.models.load_model('./idenbol_1.0.h5')  # Replace with your model's path
+
+        # Run inference
+        predictions = model(tensor)
+        predictions = tf.squeeze(predictions, axis=0)
+
+        binary_predictions = [True if pred >= 0.5 else False for pred in predictions]
+
+        return jsonify({
+            "message": "Photo processed successfully",
+            "predicted_class": binary_predictions,
+        }), 200
+    except Exception as e:
+        print(str(e))
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)#run
