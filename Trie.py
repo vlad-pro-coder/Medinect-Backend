@@ -82,8 +82,8 @@ class Trie:
     
 
 
-#word = "nurofeen"
-#words = ["nurofen"]
+#word = "cu"
+#words = ['calciu']
 #trie = Trie(words)
 #pdb.set_trace()
 

@@ -34,6 +34,7 @@ class Scraper:
         return None
 
     #functions
+        
 
     async def fetch(self,session,url):
         try: #this fetches the html content of a page
@@ -51,14 +52,21 @@ class Scraper:
         parsed = urlparse(url)#if the url has "https://" and a valid domain name
         return bool(parsed.netloc) and bool(parsed.scheme)
 
-    async def is_same_path(self,url): #exclude some exceptions
-        return  url.startswith(allowedDomain) and (not ("sort_by" in url)) and (not ("#" in url))
-
     def has_exception(self,url): #if the url containes any of these exceptions the url is trashed
         if "order=" in url:
             return True
         if "id_currency" in url:
             return True
+        if self.language == "fra":
+            if "fr" not in url:
+                return True
+            return bool(re.search(r'\d',url))
+        if self.language == "deu":
+            if "?" in url:
+                return True
+            if "brands" in url:
+                return True
+            return bool(re.search(r'\d',url))
         if self.language == "eng":
             if "prd-" in url:
                 return True
@@ -79,15 +87,64 @@ class Scraper:
             if "rating=" in url:
                 return True
         if self.language == "ron":
+            if "sort_by" in url:
+                return True
+            if "#" in url:
+                return True
+            if "marci" in url:
+                return True
+            if "magazine" in url:
+                return True
+            if "articole" in url:
+                return True
+            if "page=" in url:
+                return True
+            if "blog" in url:
+                return True
+            if "legal" in url:
+                return True
+            if "brand" in url:
+                return True
+            if "gama" in url:
+                return True
+            if "cauti" in url:
+                return True
+            if "pag-" in url:
+                return False
             return bool(re.search(r'\d',url))
         return False
+    
+    async def create_page_links(self,session,url):
+        try:
+            available_pages = []
+            page = 2
+            domain_name = urlparse(url).netloc
+            print(domain_name)
+            if domain_name not in GlobalVariables.available_pages_domains:
+                return []
+            while True:
+                link_url = url + GlobalVariables.available_pages_domains[domain_name] + str(page)
+                
+                async with aiohttp.ClientSession(headers=self.headers) as session:
+                    async with session.head(link_url, allow_redirects=True) as response:
+                        print(link_url,response.status)
+                        if 200 <= response.status < 400:
+                            tempsoup = BeautifulSoup(await response.text(), 'html.parser')
+                            if tempsoup.find('div',class_="notice alert") != None:
+                                available_pages.append(link_url)
+                            else:
+                                return available_pages
+                        else:
+                                return available_pages
+                page+=1
+        except aiohttp.ClientError as e: 
+            print("error",e)
 
     async def crawl(self,session,url):
+        
         async with self.lock: #with the lock we check if the url we are scraping is in the visited urls
             if url in self.visited_urls: 
                 return 
-            if not await self.is_same_path(url): 
-                return
             self.visited_urls.add(url)
         print(f"Crawling: {url}")
 
@@ -96,13 +153,21 @@ class Scraper:
             if not html_content: #if error then do nothing
                 return
             soup = BeautifulSoup(html_content, 'html.parser')#give it to the bs4 library
-
             # Extract and process data from the page
             process_page,domain = self.get_scraper(url)#get the domain and the scrape rules
             process_page(soup,domain,self.ScrapedData,self.TrieWords)#process the resulted html
 
+            print(url)
+
             # Find and follow links on the page
             tasks = []
+
+            
+            for link in await self.create_page_links(session,url):
+                if await self.is_valid_url(link):
+                    task = asyncio.create_task(self.crawl(session,link_url))
+                    tasks.append(task)
+
             for link in soup.find_all('a', href=True):
                 if not self.has_exception(link['href']):
                     link_url = urljoin(domain, link['href'])

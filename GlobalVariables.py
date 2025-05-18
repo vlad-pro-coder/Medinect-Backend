@@ -12,7 +12,7 @@ def hasKeyWords(name,TrieWords):
     name = name.lower()#upper letters have no sens
     name = unidecode(name)#other langauges extra letters besides english ones get transformed their english equivalent
     words = re.findall(r"\b[a-zA-Z]+\b",name)#same regex rules like in entryPoint.py
-    TakeCandidate = False
+    words = list(filter(lambda word: len(word) >= 3, words))
 
     for word in words:#for every word in the products title we make a verification
         #calculate the typo tolerance
@@ -20,9 +20,10 @@ def hasKeyWords(name,TrieWords):
         if len(word) % PerLettersTypoTolerance != 0:
             TypoTolerance+=1
         #determine if the word is a match or no
-        TakeCandidate = TakeCandidate or TrieWords.start_search_possible_matches(word,TypoTolerance)
+        if TrieWords.start_search_possible_matches(word,int(TypoTolerance)):
+            return True
 
-    return TakeCandidate
+    return False
 
 #for the next 8 functions these are the we scarper rules and how the web scraper gets its items
 #based on the site layout these function take the link of the product, link of the product's image and the name of the product
@@ -48,22 +49,46 @@ def farm_tei_scraper(soup,_,ScrapedData,TrieWords):
                 #print(data)
                 ScrapedData.append(data)
 
-def drmax_scraper(soup,domain,ScrapedData,TrieWords):
-    # This function can be customized to extract data as needed
-    products = soup.findAll('li', class_='tile')
+#def drmax_scraper(soup,domain,ScrapedData,TrieWords):
+#    # This function can be customized to extract data as needed
+#    products = soup.findAll('li', class_='tile')
+#
+#    for product in products:
+#        #print(product)
+#        aux = product.findAll('h3','tile__title')
+#        if aux == []:
+#            continue
+#        name = aux[0].text
+#
+#        if hasKeyWords(name,TrieWords):
+#            data = {
+#                'name':name,
+#                'link':domain + product.findAll('div',class_='tile__image')[0].findAll('a')[0]['href'],
+#                'imagelink':domain + product.findAll('picture',class_='lazy-image')[0].findAll('img')[0]['src']
+#            }
+#            #print(data)
+#            ScrapedData.append(data)
+
+def crin_farm_scraper(soup,domain,ScrapedData,TrieWords):
+    products = soup.findAll('div',class_='product')
 
     for product in products:
-        #print(product)
-        aux = product.findAll('h3','tile__title')
+        aux = product.findAll('h2',class_='product-name')
+
         if aux == []:
             continue
-        name = aux[0].text
+        aux = aux[0].findAll('a')
 
-        if hasKeyWords(name,TrieWords):
+        if aux == []:
+            continue
+
+        name = aux[0]
+
+        if hasKeyWords(name.text,TrieWords):
             data = {
-                'name':name,
-                'link':domain + product.findAll('div',class_='tile__image')[0].findAll('a')[0]['href'],
-                'imagelink':domain + product.findAll('picture',class_='lazy-image')[0].findAll('img')[0]['src']
+                'name':name.text,
+                'link':domain + '/' +  name['href'],
+                'imagelink':product.findAll('img')[0]['src']
             }
             #print(data)
             ScrapedData.append(data)
@@ -204,18 +229,27 @@ scrapeSites = {
         'https://comenzi.farmaciatei.ro/viata-sexuala',
         'https://comenzi.farmaciatei.ro/vet',
 
-        'https://www.drmax.ro/marca-proprie',
-        'https://www.drmax.ro/medicamente-fara-reteta',
-        'https://www.drmax.ro/suplimente-alimentare',
-        'https://www.drmax.ro/mama-si-copilul',
-        'https://www.drmax.ro/frumusete-si-ingrijire',
-        'https://www.drmax.ro/frumusete-si-ingrijire/dermatocosmetice',
-        'https://www.drmax.ro/dieta-si-nutritie',
-        'https://www.drmax.ro/subiecte-tabu',
-        'https://www.drmax.ro/tehnico-medicale',
-        'https://www.drmax.ro/cuplu-si-sex',
-        'https://www.drmax.ro/eco',
-        'https://www.drmax.ro/frumusete-si-ingrijire/machiaj'
+        #'https://www.drmax.ro/marca-proprie',
+        #'https://www.drmax.ro/medicamente-fara-reteta',
+        #'https://www.drmax.ro/suplimente-alimentare',
+        #'https://www.drmax.ro/mama-si-copilul',
+        #'https://www.drmax.ro/frumusete-si-ingrijire',
+        #'https://www.drmax.ro/frumusete-si-ingrijire/dermatocosmetice',
+        #'https://www.drmax.ro/dieta-si-nutritie',
+        #'https://www.drmax.ro/subiecte-tabu',
+        #'https://www.drmax.ro/tehnico-medicale',
+        #'https://www.drmax.ro/cuplu-si-sex',
+        #'https://www.drmax.ro/eco',
+        #'https://www.drmax.ro/frumusete-si-ingrijire/machiaj'
+
+        'https://www.crinfarm.ro/terapie',
+        'https://www.crinfarm.ro/alimentatie-speciala',
+        'https://www.crinfarm.ro/mama-si-copilul',
+        'https://www.crinfarm.ro/ingrijire-personala',
+        'https://www.crinfarm.ro/viata-sexuala',
+        'https://www.crinfarm.ro/dieta-si-wellness',
+        'https://www.crinfarm.ro/aparatura-si-dispozitive-medicale',
+        'https://www.crinfarm.ro/vitamine-si-suplimente',
     ],
     'eng':[
         'https://www.medical-supermarket.com/Products/1491/Infection-Control',
@@ -386,10 +420,14 @@ scrapeSites = {
     ]
 }
 
+available_pages_domains = {
+    'https://www.crinfarm.ro':'/pag-',
+}
+
 #the rules we use based on nationality
 scrapeRules = {
     'ron':{
-        'https://www.drmax.ro':drmax_scraper,
+        'https://www.crinfarm.ro':crin_farm_scraper,
         'https://comenzi.farmaciatei.ro':farm_tei_scraper,
     },
     'eng':{
