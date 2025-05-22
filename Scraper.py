@@ -89,6 +89,8 @@ class Scraper:
         if self.language == "ron":
             if "sort_by" in url:
                 return True
+            if "info-tei" in url:
+                return True
             if "#" in url:
                 return True
             if "marci" in url:
@@ -119,7 +121,6 @@ class Scraper:
             available_pages = []
             page = 2
             domain_name = urlparse(url).netloc
-            print(domain_name)
             if domain_name not in GlobalVariables.available_pages_domains:
                 return []
             while True:
@@ -127,7 +128,6 @@ class Scraper:
                 
                 async with aiohttp.ClientSession(headers=self.headers) as session:
                     async with session.head(link_url, allow_redirects=True) as response:
-                        print(link_url,response.status)
                         if 200 <= response.status < 400:
                             tempsoup = BeautifulSoup(await response.text(), 'html.parser')
                             if tempsoup.find('div',class_="notice alert") != None:
@@ -156,8 +156,6 @@ class Scraper:
             # Extract and process data from the page
             process_page,domain = self.get_scraper(url)#get the domain and the scrape rules
             process_page(soup,domain,self.ScrapedData,self.TrieWords)#process the resulted html
-
-            print(url)
 
             # Find and follow links on the page
             tasks = []
